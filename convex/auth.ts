@@ -86,10 +86,14 @@ export const loginStudentAction = action({
 export const loginTeacherAction = action({
   args: { email: v.string(), password: v.string() },
   handler: async (ctx, { email, password }) => {
+    console.log("Teacher login attempt for email:", email);
     const user = await ctx.runQuery(api.users.getTeacherByEmail, { email });
+    console.log("Teacher found:", !!user);
     if (!user) throw new Error("Invalid credentials");
     const ok = await bcrypt.compare(password, user.passwordHash);
+    console.log("Teacher password match:", ok);
     if (!ok) throw new Error("Invalid credentials");
+    console.log("Teacher login successful for:", user.name);
     return { id: user._id, name: user.name, email: user.email };
   },
 });
