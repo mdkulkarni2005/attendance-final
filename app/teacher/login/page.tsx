@@ -31,7 +31,14 @@ export default function TeacherLoginPage() {
     try {
       const user = await login(parse.data);
       if (typeof window !== "undefined") {
+        // Store in sessionStorage for backward compatibility
         sessionStorage.setItem("teacher", JSON.stringify(user));
+        
+        // Also store in cookies for middleware
+        const cookieValue = JSON.stringify(user);
+        const expires = new Date();
+        expires.setDate(expires.getDate() + 7); // 7 days
+        document.cookie = `teacher-session=${encodeURIComponent(cookieValue)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
       }
       router.push("/teacher/dashboard");
     } catch (err: any) {

@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { setAuthCookie } from "@/utils/auth";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -31,7 +32,14 @@ export default function StudentLoginPage() {
     try {
       const user = await login(parse.data);
       if (typeof window !== "undefined") {
+        // Store in sessionStorage for backward compatibility
         sessionStorage.setItem("student", JSON.stringify(user));
+        
+        // Also store in cookies for middleware
+        const cookieValue = JSON.stringify(user);
+        const expires = new Date();
+        expires.setDate(expires.getDate() + 7); // 7 days
+        document.cookie = `student-session=${encodeURIComponent(cookieValue)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
       }
       router.push("/student/dashboard");
     } catch (err: any) {
