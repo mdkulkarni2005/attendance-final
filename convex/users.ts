@@ -31,6 +31,16 @@ export const getStudentByRollNo = query({
   },
 });
 
+export const getStudentByPhone = query({
+  args: { phone: v.string() },
+  handler: async (ctx, { phone }) => {
+    return await ctx.db
+      .query("students")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .unique();
+  },
+});
+
 export const getTeacherByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
@@ -45,6 +55,7 @@ export const createStudent = mutation({
   args: {
     name: v.string(),
     year: v.number(),
+    semester: v.number(),
     department: v.string(),
     phone: v.string(),
     sapId: v.string(),
@@ -56,6 +67,7 @@ export const createStudent = mutation({
     const id = await ctx.db.insert("students", {
       name: args.name,
       year: args.year,
+      semester: args.semester,
       department: args.department,
       phone: args.phone,
       sapId: args.sapId,

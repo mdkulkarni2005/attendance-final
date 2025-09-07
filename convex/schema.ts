@@ -5,6 +5,7 @@ export default defineSchema({
   students: defineTable({
     name: v.string(),
     year: v.number(),
+    semester: v.number(),
     department: v.string(),
     phone: v.string(),
     sapId: v.string(),

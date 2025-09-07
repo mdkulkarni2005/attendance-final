@@ -10,8 +10,9 @@ import Link from "next/link";
 const studentSchema = z.object({
   name: z.string().min(1, "Name is required"),
   year: z.coerce.number().int().min(1).max(8),
+  semester: z.coerce.number().int().min(1).max(8),
   department: z.string().min(1, "Department is required"),
-  phone: z.string().min(10).max(15),
+  phone: z.string().min(10, "Phone number must be at least 10 digits").max(15, "Phone number too long").regex(/^\d+$/, "Phone number must contain only digits"),
   sapId: z.string().min(1, "SAP ID is required"),
   rollNo: z.string().min(1, "Roll No is required"),
   email: z.string().email("Invalid email"),
@@ -24,7 +25,8 @@ export default function StudentRegisterPage() {
   const [form, setForm] = useState({
     name: "",
     year: "",
-    department: "",
+    semester: "",
+    department: "Mechanical",
     phone: "",
     sapId: "",
     rollNo: "",
@@ -79,34 +81,67 @@ export default function StudentRegisterPage() {
             </div>
             <div className="grid gap-1">
               <label className="text-sm text-slate-700">Year</label>
-              <input
-                type="number"
+              <select
                 className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 name="year"
                 value={form.year}
                 onChange={onChange}
-                min={1}
-                max={8}
                 required
-              />
+              >
+                <option value="">Select Year</option>
+                <option value="1">1st Year</option>
+                <option value="2">2nd Year</option>
+                <option value="3">3rd Year</option>
+                <option value="4">4th Year</option>
+              </select>
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm text-slate-700">Semester</label>
+              <select
+                className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                name="semester"
+                value={form.semester}
+                onChange={onChange}
+                required
+              >
+                <option value="">Select Semester</option>
+                <option value="1">1st Semester</option>
+                <option value="2">2nd Semester</option>
+                <option value="3">3rd Semester</option>
+                <option value="4">4th Semester</option>
+                <option value="5">5th Semester</option>
+                <option value="6">6th Semester</option>
+                <option value="7">7th Semester</option>
+                <option value="8">8th Semester</option>
+              </select>
             </div>
             <div className="grid gap-1">
               <label className="text-sm text-slate-700">Department</label>
-              <input
+              <select
                 className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 name="department"
                 value={form.department}
                 onChange={onChange}
                 required
-              />
+              >
+                <option value="Mechanical">Mechanical Engineering</option>
+                <option value="Computer">Computer Engineering</option>
+                <option value="Electrical">Electrical Engineering</option>
+                <option value="Civil">Civil Engineering</option>
+                <option value="Electronics">Electronics Engineering</option>
+                <option value="Chemical">Chemical Engineering</option>
+              </select>
             </div>
             <div className="grid gap-1">
               <label className="text-sm text-slate-700">Phone</label>
               <input
+                type="tel"
                 className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 name="phone"
                 value={form.phone}
                 onChange={onChange}
+                placeholder="e.g. 9876543210"
+                pattern="[0-9]{10,15}"
                 required
               />
             </div>

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
-type SessionUser = { id: string; name: string; email: string; department: string; year: number } | null;
+type SessionUser = { id: string; name: string; email: string; department: string; year: number; semester: number } | null;
 
 export default function StudentAttendancePage() {
   const router = useRouter();

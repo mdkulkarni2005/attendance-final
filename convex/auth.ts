@@ -8,6 +8,7 @@ export const registerStudentAction = action({
   args: {
     name: v.string(),
     year: v.number(),
+    semester: v.number(),
     department: v.string(),
     phone: v.string(),
     sapId: v.string(),
@@ -25,11 +26,15 @@ export const registerStudentAction = action({
     const existingRoll = await ctx.runQuery(api.users.getStudentByRollNo, { rollNo: args.rollNo });
     if (existingRoll) throw new Error("Roll No already registered");
 
+    const existingPhone = await ctx.runQuery(api.users.getStudentByPhone, { phone: args.phone });
+    if (existingPhone) throw new Error("Phone number already registered");
+
     const passwordHash = await bcrypt.hash(args.password, 10);
 
     const { id } = await ctx.runMutation(api.users.createStudent, {
       name: args.name,
       year: args.year,
+      semester: args.semester,
       department: args.department,
       phone: args.phone,
       sapId: args.sapId,
@@ -74,7 +79,7 @@ export const loginStudentAction = action({
     const ok = await bcrypt.compare(password, user.passwordHash);
     console.log("Password match:", ok);
     if (!ok) throw new Error("Incorrect password");
-    return { id: user._id, name: user.name, email: user.email, department: user.department, year: user.year };
+    return { id: user._id, name: user.name, email: user.email, department: user.department, year: user.year, semester: user.semester };
   },
 });
 

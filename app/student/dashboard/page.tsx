@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
-type SessionUser = { id: string; name: string; email: string; department: string; year: number } | null;
+type SessionUser = { id: string; name: string; email: string; department: string; year: number; semester: number } | null;
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -108,6 +108,7 @@ export default function StudentDashboard() {
             </div>
             <div className="p-6">
               <ul className="space-y-2 text-sm text-slate-800">
+                <li><a className="hover:underline" href="/student/attendance-history">My Attendance Records</a></li>
                 <li><a className="hover:underline" href="#">Profile</a></li>
                 <li><a className="hover:underline" href="#">Courses</a></li>
                 <li><a className="hover:underline" href="#">Help</a></li>

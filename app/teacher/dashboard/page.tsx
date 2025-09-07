@@ -111,7 +111,7 @@ export default function TeacherDashboard() {
             </div>
             <div className="p-6">
               <div className="mt-0">
-                <h3 className="text-lg font-medium mb-3">Create Attendance Session</h3>
+                <h3 className="text-lg font-medium mb-3 text-black">Create Attendance Session</h3>
                 <form onSubmit={onCreateSession} className="grid sm:grid-cols-4 gap-3 items-end">
                   <div className="sm:col-span-2">
                     <label className="text-sm text-slate-800">Title</label>

@@ -71,3 +71,32 @@ export const getSessionAttendance = query({
     return attendanceWithStudents;
   },
 });
+
+export const getStudentAttendanceHistory = query({
+  args: { studentId: v.id("students") },
+  handler: async (ctx, { studentId }) => {
+    const attendance = await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", studentId))
+      .collect();
+
+    // Get session details for each attendance record
+    const attendanceWithSessions = await Promise.all(
+      attendance.map(async (record) => {
+        const session = await ctx.db.get(record.sessionId);
+        return {
+          ...record,
+          session: session ? {
+            title: session.title,
+            department: session.department,
+            year: session.year,
+            createdAt: session.createdAt,
+            isOpen: session.isOpen,
+          } : null,
+        };
+      })
+    );
+
+    return attendanceWithSessions.sort((a, b) => b.markedAt - a.markedAt);
+  },
+});
