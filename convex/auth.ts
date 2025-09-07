@@ -8,7 +8,7 @@ export const registerStudentAction = action({
   args: {
     name: v.string(),
     year: v.number(),
-    semester: v.number(),
+    semester: v.optional(v.number()),
     department: v.string(),
     phone: v.string(),
     sapId: v.string(),

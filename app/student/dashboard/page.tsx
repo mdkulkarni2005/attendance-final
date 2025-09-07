@@ -108,10 +108,10 @@ export default function StudentDashboard() {
             </div>
             <div className="p-6">
               <ul className="space-y-2 text-sm text-slate-800">
-                <li><a className="hover:underline" href="/student/attendance-history">My Attendance Records</a></li>
-                <li><a className="hover:underline" href="#">Profile</a></li>
-                <li><a className="hover:underline" href="#">Courses</a></li>
-                <li><a className="hover:underline" href="#">Help</a></li>
+                <li><Link href="/student/attendance-history" className="hover:underline">My Attendance Records</Link></li>
+                <li><Link href="/student/profile" className="hover:underline">Profile</Link></li>
+                <li><Link href="/student/courses" className="hover:underline">Courses</Link></li>
+                <li><Link href="/student/help" className="hover:underline">Help</Link></li>
               </ul>
             </div>
           </div>
