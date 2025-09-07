@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { setAuthCookie } from "@/utils/auth";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -20,6 +19,14 @@ export default function StudentLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Check for session expiration message
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('expired') === 'true') {
+      setError("Your session has expired after 2 minutes. Please login again.");
+    }
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -32,13 +39,19 @@ export default function StudentLoginPage() {
     try {
       const user = await login(parse.data);
       if (typeof window !== "undefined") {
+        // Add login timestamp for session expiration
+        const userWithTimestamp = {
+          ...user,
+          loginTime: Date.now()
+        };
+        
         // Store in sessionStorage for backward compatibility
-        sessionStorage.setItem("student", JSON.stringify(user));
+        sessionStorage.setItem("student", JSON.stringify(userWithTimestamp));
         
         // Also store in cookies for middleware
-        const cookieValue = JSON.stringify(user);
+        const cookieValue = JSON.stringify(userWithTimestamp);
         const expires = new Date();
-        expires.setDate(expires.getDate() + 7); // 7 days
+        expires.setDate(expires.getDate() + 7); // 7 days (but session expires in 2 min)
         document.cookie = `student-session=${encodeURIComponent(cookieValue)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
       }
       router.push("/student/dashboard");

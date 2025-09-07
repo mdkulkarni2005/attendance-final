@@ -36,12 +36,53 @@ export const closeSession = mutation({
 export const listOpenForDeptYear = query({
   args: { department: v.string(), year: v.number() },
   handler: async (ctx, { department, year }) => {
-    // Get all sessions for dept/year and filter open
+    // Session timeout: 2 minutes (120,000 milliseconds)
+    const SESSION_TIMEOUT = 2 * 60 * 1000;
+    const now = Date.now();
+    
+    // Get all sessions for dept/year
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_dept_year", (q) => q.eq("department", department).eq("year", year))
       .collect();
-    return sessions.filter((s) => s.isOpen === true);
+    
+    // Filter sessions that are open and not expired
+    return sessions.filter((session) => {
+      if (!session.isOpen) return false;
+      const sessionAge = now - session.createdAt;
+      return sessionAge <= SESSION_TIMEOUT;
+    });
+  },
+});
+
+export const closeExpiredSessions = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Session timeout: 2 minutes (120,000 milliseconds)
+    const SESSION_TIMEOUT = 2 * 60 * 1000;
+    const now = Date.now();
+    
+    // Get all open sessions
+    const openSessions = await ctx.db
+      .query("sessions")
+      .filter((q) => q.eq(q.field("isOpen"), true))
+      .collect();
+    
+    let closedCount = 0;
+    
+    // Close expired sessions
+    for (const session of openSessions) {
+      const sessionAge = now - session.createdAt;
+      if (sessionAge > SESSION_TIMEOUT) {
+        await ctx.db.patch(session._id, {
+          isOpen: false,
+          closedAt: now
+        });
+        closedCount++;
+      }
+    }
+    
+    return { closedCount };
   },
 });
 
@@ -62,13 +103,24 @@ export const listOpenForStudent = query({
     if (!studentId) return [];
     const student = await ctx.db.get(studentId);
     if (!student) return [];
+    
+    // Session timeout: 2 minutes (120,000 milliseconds)
+    const SESSION_TIMEOUT = 2 * 60 * 1000;
+    const now = Date.now();
+    
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_dept_year", (q) =>
         q.eq("department", student.department).eq("year", student.year)
       )
       .collect();
-    return sessions.filter((s) => s.isOpen === true);
+    
+    // Filter sessions that are open and not expired
+    return sessions.filter((session) => {
+      if (!session.isOpen) return false;
+      const sessionAge = now - session.createdAt;
+      return sessionAge <= SESSION_TIMEOUT;
+    });
   },
 });
 
