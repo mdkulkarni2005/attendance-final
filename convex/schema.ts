@@ -56,13 +56,22 @@ export default defineSchema({
   attendance: defineTable({
     sessionId: v.id("sessions"),
     studentId: v.id("students"),
+    // Make optional to allow existing docs without status to validate
+    status: v.optional(v.union(v.literal("present"), v.literal("absent"))), // attendance status
     markedAt: v.number(),
     // Store student's location when marking attendance
     studentLatitude: v.optional(v.number()),
     studentLongitude: v.optional(v.number()),
     distanceFromTeacher: v.optional(v.number()), // distance in meters
+    // Manual override by teacher
+    isManuallySet: v.optional(v.boolean()), // true if teacher manually changed status
+    setByTeacher: v.optional(v.id("teachers")), // teacher who manually set the status
+    teacherNote: v.optional(v.string()), // optional note from teacher
+    lastModified: v.optional(v.number()), // when status was last changed
   })
     .index("by_session", ["sessionId"])
     .index("by_student", ["studentId"])
-    .index("by_session_student", ["sessionId", "studentId"]),
+    .index("by_session_student", ["sessionId", "studentId"])
+    .index("by_status", ["status"])
+    .index("by_session_status", ["sessionId", "status"]),
 });

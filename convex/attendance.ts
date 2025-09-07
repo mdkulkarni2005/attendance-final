@@ -72,6 +72,7 @@ export const markAttendanceWithQr = mutation({
       const id = await ctx.db.insert("attendance", {
         sessionId: session._id,
         studentId,
+        status: "present",
         markedAt: Date.now(),
         studentLatitude,
         studentLongitude,
@@ -142,6 +143,7 @@ export const markAttendance = mutation({
       const id = await ctx.db.insert("attendance", {
         sessionId,
         studentId,
+        status: "present",
         markedAt: Date.now(),
         studentLatitude,
         studentLongitude,
@@ -154,6 +156,7 @@ export const markAttendance = mutation({
       const id = await ctx.db.insert("attendance", {
         sessionId,
         studentId,
+        status: "present",
         markedAt: Date.now(),
         studentLatitude,
         studentLongitude,
@@ -161,6 +164,177 @@ export const markAttendance = mutation({
 
       return { id };
     }
+  },
+});
+
+// Manual attendance management by teacher
+export const setAttendanceStatus = mutation({
+  args: {
+    sessionId: v.id("sessions"),
+    studentId: v.id("students"),
+    status: v.union(v.literal("present"), v.literal("absent")),
+    teacherId: v.id("teachers"),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, { sessionId, studentId, status, teacherId, note }) => {
+    // Verify session exists and teacher owns it
+    const session = await ctx.db.get(sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.teacherId !== teacherId) throw new Error("Not authorized to modify this session");
+
+    // Verify student exists
+    const student = await ctx.db.get(studentId);
+    if (!student) throw new Error("Student not found");
+
+    // Check if student belongs to session's department and year
+    if (student.department !== session.department || student.year !== session.year) {
+      throw new Error("Student is not eligible for this session");
+    }
+
+    // Check if attendance record already exists
+    const existing = await ctx.db
+      .query("attendance")
+      .withIndex("by_session_student", (q) =>
+        q.eq("sessionId", sessionId).eq("studentId", studentId)
+      )
+      .first();
+
+    if (existing) {
+      // Update existing record
+      await ctx.db.patch(existing._id, {
+        status,
+        isManuallySet: true,
+        setByTeacher: teacherId,
+        teacherNote: note,
+        lastModified: Date.now(),
+      });
+      return { id: existing._id, action: "updated" };
+    } else {
+      // Create new attendance record
+      const id = await ctx.db.insert("attendance", {
+        sessionId,
+        studentId,
+        status,
+        markedAt: Date.now(),
+        isManuallySet: true,
+        setByTeacher: teacherId,
+        teacherNote: note,
+        lastModified: Date.now(),
+      });
+      return { id, action: "created" };
+    }
+  },
+});
+
+// Mark students as absent when session closes
+export const markAbsentStudents = mutation({
+  args: {
+    sessionId: v.id("sessions"),
+    teacherId: v.id("teachers"),
+  },
+  handler: async (ctx, { sessionId, teacherId }) => {
+    // Verify session exists and teacher owns it
+    const session = await ctx.db.get(sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.teacherId !== teacherId) throw new Error("Not authorized");
+
+    // Get all students in the same department and year
+    const eligibleStudents = await ctx.db
+      .query("students")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("department"), session.department),
+          q.eq(q.field("year"), session.year)
+        )
+      )
+      .collect();
+
+    // Get all attendance records for this session
+    const existingAttendance = await ctx.db
+      .query("attendance")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+
+    const attendedStudentIds = new Set(
+      existingAttendance.map((record) => record.studentId)
+    );
+
+    // Mark absent students
+    let absentCount = 0;
+    for (const student of eligibleStudents) {
+      if (!attendedStudentIds.has(student._id)) {
+        await ctx.db.insert("attendance", {
+          sessionId,
+          studentId: student._id,
+          status: "absent",
+          markedAt: Date.now(),
+          isManuallySet: false, // Automatically marked absent
+          teacherNote: "Automatically marked absent - session closed without attendance",
+          lastModified: Date.now(),
+        });
+        absentCount++;
+      }
+    }
+
+    return { 
+      totalEligible: eligibleStudents.length,
+      presentCount: existingAttendance.length,
+      absentCount,
+    };
+  },
+});
+
+// Get comprehensive attendance report for session
+export const getSessionAttendanceReport = query({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) return null;
+
+    // Get all attendance records for this session
+    const attendanceRecords = await ctx.db
+      .query("attendance")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+
+    // Get student details for each attendance record
+    const attendanceWithStudents = await Promise.all(
+      attendanceRecords.map(async (record) => {
+        const student = await ctx.db.get(record.studentId);
+        return {
+          ...record,
+          student,
+        };
+      })
+    );
+
+    // Get all eligible students (for absent tracking)
+    const eligibleStudents = await ctx.db
+      .query("students")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("department"), session.department),
+          q.eq(q.field("year"), session.year)
+        )
+      )
+      .collect();
+
+    const presentStudents = attendanceWithStudents.filter(r => r.status === "present");
+    const absentStudents = attendanceWithStudents.filter(r => r.status === "absent");
+
+    return {
+      session,
+      attendance: attendanceWithStudents,
+      stats: {
+        totalEligible: eligibleStudents.length,
+        present: presentStudents.length,
+        absent: absentStudents.length,
+        presentPercentage: eligibleStudents.length > 0 
+          ? Math.round((presentStudents.length / eligibleStudents.length) * 100) 
+          : 0,
+      },
+      eligibleStudents,
+    };
   },
 });
 

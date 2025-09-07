@@ -34,8 +34,54 @@ export const closeSession = mutation({
     const session = await ctx.db.get(sessionId);
     if (!session) throw new Error("Session not found");
     if (session.teacherId !== teacherId) throw new Error("Not allowed");
+    
+    // Close the session
     await ctx.db.patch(sessionId, { isOpen: false, closedAt: Date.now() });
-    return { ok: true };
+    
+    // Automatically mark absent students
+    const eligibleStudents = await ctx.db
+      .query("students")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("department"), session.department),
+          q.eq(q.field("year"), session.year)
+        )
+      )
+      .collect();
+
+    // Get all attendance records for this session
+    const existingAttendance = await ctx.db
+      .query("attendance")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+
+    const attendedStudentIds = new Set(
+      existingAttendance.map((record) => record.studentId)
+    );
+
+    // Mark absent students
+    let absentCount = 0;
+    for (const student of eligibleStudents) {
+      if (!attendedStudentIds.has(student._id)) {
+        await ctx.db.insert("attendance", {
+          sessionId,
+          studentId: student._id,
+          status: "absent",
+          markedAt: Date.now(),
+          isManuallySet: false,
+          teacherNote: "Automatically marked absent - session closed without attendance",
+          lastModified: Date.now(),
+        });
+        absentCount++;
+      }
+    }
+    
+    return { 
+      ok: true, 
+      absentStudentsMarked: absentCount,
+      totalEligible: eligibleStudents.length,
+      presentCount: existingAttendance.length 
+    };
   },
 });
 
