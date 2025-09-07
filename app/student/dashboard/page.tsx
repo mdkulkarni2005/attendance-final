@@ -35,7 +35,13 @@ export default function StudentDashboard() {
   );
 
   function logout() {
+    // Clear sessionStorage
     sessionStorage.removeItem("student");
+    
+    // Clear the authentication cookie
+    document.cookie = "student-session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    
+    // Redirect to login page
     router.replace("/student/login");
   }
 
@@ -62,6 +68,24 @@ export default function StudentDashboard() {
         </header>
 
         <section className="grid gap-6 md:grid-cols-3">
+          {/* QR Scanner Quick Access */}
+          <div className="md:col-span-3 mb-4">
+            <Link 
+              href="/student/qr-scanner"
+              className="block w-full p-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-2xl shadow-lg hover:from-green-700 hover:to-green-800 transition-all"
+            >
+              <div className="flex items-center justify-center gap-3">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold">📱 Scan QR Code</h3>
+                  <p className="text-green-100 text-sm">Quick access to attendance sessions</p>
+                </div>
+              </div>
+            </Link>
+          </div>
+
           <div className="md:col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
             <div className="-mx-0 -mt-0 px-6 py-3 bg-slate-50 border-b rounded-t-2xl">
               <h2 className="text-base font-semibold text-slate-900">Open Attendance Sessions for You</h2>

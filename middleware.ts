@@ -23,17 +23,6 @@ export function middleware(request: NextRequest) {
   const studentCookie = request.cookies.get('student-session')
   const teacherCookie = request.cookies.get('teacher-session')
 
-  // Session timeout: 2 minutes (120,000 milliseconds)
-  const SESSION_TIMEOUT = 2 * 60 * 1000
-
-  // Helper function to check if session is expired
-  function isSessionExpired(userData: any): boolean {
-    if (!userData || !userData.loginTime) return true
-    const now = Date.now()
-    const sessionAge = now - userData.loginTime
-    return sessionAge > SESSION_TIMEOUT
-  }
-
   // Check if the route is for students
   const isStudentRoute = pathname.startsWith('/student')
   const isTeacherRoute = pathname.startsWith('/teacher')
@@ -53,13 +42,6 @@ export function middleware(request: NextRequest) {
       if (studentCookie) {
         try {
           studentUser = JSON.parse(studentCookie.value);
-          
-          // Check if session has expired
-          if (isSessionExpired(studentUser)) {
-            const response = NextResponse.redirect(new URL('/student/login?expired=true', request.url));
-            response.cookies.delete('student-session');
-            return response;
-          }
         } catch (e) {
           // Invalid cookie, clear it and redirect
           const response = NextResponse.redirect(new URL('/student/login', request.url));
@@ -92,13 +74,6 @@ export function middleware(request: NextRequest) {
         try {
           studentUser = JSON.parse(studentCookie.value);
           
-          // Check if session has expired
-          if (isSessionExpired(studentUser)) {
-            const response = NextResponse.next();
-            response.cookies.delete('student-session');
-            return response;
-          }
-          
           // If authenticated and has valid student data, redirect to dashboard
           if (studentUser && studentUser.email && studentUser.department && studentUser.year) {
             return NextResponse.redirect(new URL('/student/dashboard', request.url));
@@ -130,13 +105,6 @@ export function middleware(request: NextRequest) {
       if (teacherCookie) {
         try {
           teacherUser = JSON.parse(teacherCookie.value);
-          
-          // Check if session has expired
-          if (isSessionExpired(teacherUser)) {
-            const response = NextResponse.redirect(new URL('/teacher/login?expired=true', request.url));
-            response.cookies.delete('teacher-session');
-            return response;
-          }
         } catch (e) {
           // Invalid cookie, clear it and redirect
           const response = NextResponse.redirect(new URL('/teacher/login', request.url));
@@ -169,13 +137,6 @@ export function middleware(request: NextRequest) {
         try {
           teacherUser = JSON.parse(teacherCookie.value);
           
-          // Check if session has expired
-          if (isSessionExpired(teacherUser)) {
-            const response = NextResponse.next();
-            response.cookies.delete('teacher-session');
-            return response;
-          }
-          
           // If authenticated and has valid teacher data, redirect to dashboard
           if (teacherUser && teacherUser.email && !teacherUser.department && !teacherUser.year) {
             return NextResponse.redirect(new URL('/teacher/dashboard', request.url));
@@ -192,9 +153,43 @@ export function middleware(request: NextRequest) {
     }
   }
   
-  // For root path, redirect to student login
+  // For root path, check for existing sessions and redirect accordingly
   if (pathname === '/') {
-    return NextResponse.redirect(new URL('/student/login', request.url));
+    // Check if user has existing sessions
+    if (studentCookie) {
+      try {
+        const studentUser = JSON.parse(studentCookie.value);
+        if (studentUser && studentUser.email && studentUser.department && studentUser.year) {
+          // Valid student session exists, redirect to student dashboard
+          return NextResponse.redirect(new URL('/student/dashboard', request.url));
+        } else {
+          // Invalid student session, redirect to student login
+          return NextResponse.redirect(new URL('/student/login', request.url));
+        }
+      } catch (e) {
+        // Invalid cookie, redirect to student login
+        return NextResponse.redirect(new URL('/student/login', request.url));
+      }
+    }
+    
+    if (teacherCookie) {
+      try {
+        const teacherUser = JSON.parse(teacherCookie.value);
+        if (teacherUser && teacherUser.email && !teacherUser.department && !teacherUser.year) {
+          // Valid teacher session exists, redirect to teacher dashboard
+          return NextResponse.redirect(new URL('/teacher/dashboard', request.url));
+        } else {
+          // Invalid teacher session, redirect to teacher login
+          return NextResponse.redirect(new URL('/teacher/login', request.url));
+        }
+      } catch (e) {
+        // Invalid cookie, redirect to teacher login
+        return NextResponse.redirect(new URL('/teacher/login', request.url));
+      }
+    }
+    
+    // No existing sessions found, allow access to main page with tab system
+    return NextResponse.next();
   }
   
   return NextResponse.next();

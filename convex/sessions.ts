@@ -7,8 +7,11 @@ export const createSession = mutation({
     department: v.string(),
     year: v.number(),
     teacherId: v.id("teachers"),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    allowedRadius: v.optional(v.number()),
   },
-  handler: async (ctx, { title, department, year, teacherId }) => {
+  handler: async (ctx, { title, department, year, teacherId, latitude, longitude, allowedRadius }) => {
     const id = await ctx.db.insert("sessions", {
       title,
       department,
@@ -17,6 +20,9 @@ export const createSession = mutation({
       teacherId,
       createdAt: Date.now(),
       closedAt: undefined,
+      latitude,
+      longitude,
+      allowedRadius: allowedRadius || 100, // Default 100 meters radius
     });
     return { id };
   },
@@ -130,3 +136,77 @@ export const getSession = query({
     return await ctx.db.get(sessionId);
   },
 });
+
+// Generate secure QR token for session
+export const generateQrToken = mutation({
+  args: { 
+    sessionId: v.id("sessions"), 
+    teacherId: v.id("teachers") 
+  },
+  handler: async (ctx, { sessionId, teacherId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.teacherId !== teacherId) throw new Error("Not authorized");
+    if (!session.isOpen) throw new Error("Session is closed");
+
+    // Generate cryptographically secure token
+    const qrToken = generateSecureToken();
+    const expiry = Date.now() + (5 * 60 * 1000); // 5 minutes expiry
+
+    // Update session with new QR token
+    await ctx.db.patch(sessionId, {
+      currentQrToken: qrToken,
+      qrTokenExpiry: expiry,
+      qrTokenUsedBy: [], // Reset used list
+    });
+
+    return { 
+      qrToken, 
+      expiry,
+      sessionId: sessionId 
+    };
+  },
+});
+
+// Validate QR token and get session info
+export const validateQrToken = query({
+  args: { qrToken: v.string() },
+  handler: async (ctx, { qrToken }) => {
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_qr_token", (q) => q.eq("currentQrToken", qrToken))
+      .first();
+
+    if (!session) {
+      return { valid: false, reason: "Invalid QR code" };
+    }
+
+    if (!session.isOpen) {
+      return { valid: false, reason: "Session is closed" };
+    }
+
+    if (!session.qrTokenExpiry || Date.now() > session.qrTokenExpiry) {
+      return { valid: false, reason: "QR code has expired" };
+    }
+
+    return { 
+      valid: true, 
+      sessionId: session._id,
+      title: session.title,
+      department: session.department,
+      year: session.year,
+      allowedRadius: session.allowedRadius
+    };
+  },
+});
+
+// Helper function to generate secure token
+function generateSecureToken(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 15);
+  const morePart = Math.random().toString(36).substring(2, 15);
+  
+  return `AT_${timestamp}_${randomPart}_${morePart}`;
+}

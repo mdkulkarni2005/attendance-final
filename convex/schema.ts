@@ -39,15 +39,28 @@ export default defineSchema({
     teacherId: v.id("teachers"),
     createdAt: v.number(),
     closedAt: v.optional(v.number()),
+    // Location data for attendance verification
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    allowedRadius: v.optional(v.number()), // radius in meters
+    // QR Code Security
+    currentQrToken: v.optional(v.string()), // Current active QR token
+    qrTokenExpiry: v.optional(v.number()), // When current QR token expires
+    qrTokenUsedBy: v.optional(v.array(v.id("students"))), // Students who used this QR
   })
     .index("by_teacher", ["teacherId"]) 
     .index("by_dept_year", ["department", "year"]) 
-    .index("by_open", ["isOpen"]),
+    .index("by_open", ["isOpen"])
+    .index("by_qr_token", ["currentQrToken"]),
 
   attendance: defineTable({
     sessionId: v.id("sessions"),
     studentId: v.id("students"),
     markedAt: v.number(),
+    // Store student's location when marking attendance
+    studentLatitude: v.optional(v.number()),
+    studentLongitude: v.optional(v.number()),
+    distanceFromTeacher: v.optional(v.number()), // distance in meters
   })
     .index("by_session", ["sessionId"])
     .index("by_student", ["studentId"])
