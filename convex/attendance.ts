@@ -445,3 +445,71 @@ export const getStudentAttendanceHistory = query({
     return attendanceWithSessions.sort((a, b) => b.markedAt - a.markedAt);
   },
 });
+
+// Live roster for a session: every eligible student with current status (default absent)
+export const getSessionRosterLive = query({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) return null;
+
+    // All eligible students for this session's dept/year
+    const eligibleStudents = await ctx.db
+      .query("students")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("department"), session.department),
+          q.eq(q.field("year"), session.year)
+        )
+      )
+      .collect();
+
+    // All attendance records for this session
+    const records = await ctx.db
+      .query("attendance")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+
+    const recordByStudent = new Map(records.map((r) => [r.studentId, r]));
+
+    const roster = eligibleStudents.map((s) => {
+      const rec = recordByStudent.get(s._id);
+      return {
+        student: {
+          _id: s._id,
+          name: s.name,
+          email: s.email,
+          sapId: s.sapId,
+          rollNo: s.rollNo,
+        },
+        status: (rec?.status as "present" | "absent") ?? "absent",
+        recordId: rec?._id,
+        markedAt: rec?.markedAt,
+        isManuallySet: rec?.isManuallySet || false,
+        teacherNote: rec?.teacherNote,
+      };
+    });
+
+    const present = roster.filter((r) => r.status === "present").length;
+    const absent = roster.length - present;
+
+    return {
+      session: {
+        _id: session._id,
+        title: session.title,
+        department: session.department,
+        year: session.year,
+        isOpen: session.isOpen,
+        createdAt: session.createdAt,
+        closedAt: session.closedAt,
+      },
+      stats: {
+        totalEligible: roster.length,
+        present,
+        absent,
+        presentPercentage: roster.length > 0 ? Math.round((present / roster.length) * 100) : 0,
+      },
+      roster,
+    };
+  },
+});
