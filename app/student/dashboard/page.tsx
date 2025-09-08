@@ -34,19 +34,9 @@ export default function StudentDashboard() {
     user ? ({ studentId: user.id } as any) : undefined
   );
 
-  function logout() {
-    // Clear sessionStorage
-    sessionStorage.removeItem("student");
-    
-    // Clear the authentication cookie
-    document.cookie = "student-session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    
-    // Redirect to login page
-    router.replace("/student/login");
-  }
+  // Removed logout function to enforce no-logout policy
 
   function handleOpenSession(sessionId: string) {
-    // Navigate to attendance page for this session
     router.push(`/student/attendance/${sessionId}`);
   }
 
@@ -63,7 +53,7 @@ export default function StudentDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <Link href="/" className="text-sm text-white/80 hover:text-white hover:underline">Home</Link>
-            <button onClick={logout} className="px-3 py-1.5 rounded bg-white text-slate-900">Logout</button>
+            {/* Logout removed intentionally to enforce single-login per device policy */}
           </div>
         </header>
 

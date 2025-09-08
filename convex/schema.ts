@@ -53,6 +53,71 @@ export default defineSchema({
     .index("by_open", ["isOpen"])
     .index("by_qr_token", ["currentQrToken"]),
 
+  // Device tracking for security
+  deviceFingerprints: defineTable({
+    studentId: v.id("students"),
+    deviceId: v.string(), // Generated device fingerprint
+    deviceName: v.string(), // User-friendly device name (e.g., "iPhone 15", "Chrome on Windows")
+    userAgent: v.string(),
+    screenResolution: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    language: v.optional(v.string()),
+    platform: v.optional(v.string()),
+    isTrusted: v.boolean(), // Whether this device is trusted
+    isActive: v.boolean(), // Whether this device is currently active
+    firstSeen: v.number(),
+    lastSeen: v.number(),
+    lastUsedForAttendance: v.optional(v.number()),
+    suspiciousActivityCount: v.optional(v.number()),
+  })
+    .index("by_student", ["studentId"])
+    .index("by_device_id", ["deviceId"])
+    .index("by_student_trusted", ["studentId", "isTrusted"])
+    .index("by_student_active", ["studentId", "isActive"]),
+
+  // Security alerts for suspicious device activity
+  securityAlerts: defineTable({
+    studentId: v.id("students"),
+    type: v.union(
+      v.literal("new_device"),
+      v.literal("suspicious_device_change"),
+      v.literal("multiple_devices_attendance"),
+      v.literal("device_location_mismatch"),
+      v.literal("device_ownership_violation"),
+      v.literal("account_sharing_attempt"),
+      v.literal("unauthorized_device_access")
+    ),
+    severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
+    message: v.string(),
+    deviceId: v.optional(v.string()),
+    metadata: v.optional(v.object({
+      oldDevice: v.optional(v.string()),
+      newDevice: v.optional(v.string()),
+      violatingStudent: v.optional(v.id("students")),
+      deviceOwner: v.optional(v.id("students")),
+      deviceName: v.optional(v.string()),
+      location: v.optional(v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+      })),
+      sessionId: v.optional(v.id("sessions")),
+      ipAddress: v.optional(v.string()),
+      userAgent: v.optional(v.string()),
+    })),
+    isRead: v.boolean(),
+    isResolved: v.boolean(),
+    resolvedBy: v.optional(v.id("teachers")),
+    resolvedNote: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_student", ["studentId"])
+    .index("by_type", ["type"])
+    .index("by_severity", ["severity"])
+    .index("by_student_unread", ["studentId", "isRead"])
+    .index("by_unresolved", ["isResolved"])
+    .index("by_device_violations", ["deviceId", "type"]),
+
   attendance: defineTable({
     sessionId: v.id("sessions"),
     studentId: v.id("students"),
@@ -63,6 +128,9 @@ export default defineSchema({
     studentLatitude: v.optional(v.number()),
     studentLongitude: v.optional(v.number()),
     distanceFromTeacher: v.optional(v.number()), // distance in meters
+    // Device security tracking
+    deviceId: v.optional(v.string()), // Device fingerprint used for attendance
+    deviceTrusted: v.optional(v.boolean()), // Whether device was trusted at time of marking
     // Manual override by teacher
     isManuallySet: v.optional(v.boolean()), // true if teacher manually changed status
     setByTeacher: v.optional(v.id("teachers")), // teacher who manually set the status
@@ -73,5 +141,7 @@ export default defineSchema({
     .index("by_student", ["studentId"])
     .index("by_session_student", ["sessionId", "studentId"])
     .index("by_status", ["status"])
-    .index("by_session_status", ["sessionId", "status"]),
+    .index("by_session_status", ["sessionId", "status"])
+    .index("by_device", ["deviceId"])
+    .index("by_device_trusted", ["deviceTrusted"]),
 });

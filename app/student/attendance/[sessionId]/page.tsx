@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import LocationPopup from "@/app/components/LocationPopup";
+import { useDeviceSecurity } from "@/hooks/useDeviceSecurity";
 
 type SessionUser = { id: string; name: string; email: string; department: string; year: number; semester: number } | null;
 
@@ -26,6 +27,9 @@ export default function StudentAttendancePage() {
   } | null>(null);
 
   const markAttendance = useMutation(api.attendance.markAttendance);
+  
+  // Device security integration
+  const { deviceId, deviceInfo, isRegistering, hasSecurityIssues, unreadAlerts, checkDevice } = useDeviceSecurity(user?.id || null);
   
   const session = useQuery(
     api.sessions.getSession,
@@ -116,12 +120,27 @@ export default function StudentAttendancePage() {
     try {
       console.log('📍 Using captured location for attendance:', capturedLocation);
 
-      // Send attendance with captured location data
+      // Check device security before marking attendance
+      if (deviceId) {
+        const securityCheck = await checkDevice(sessionId, {
+          latitude: capturedLocation.latitude,
+          longitude: capturedLocation.longitude,
+        });
+        
+        if (securityCheck?.warnings && securityCheck.warnings.length > 0) {
+          console.warn('🔒 Device security warnings:', securityCheck.warnings);
+          // Show warnings but don't block attendance
+          alert(`⚠️ Security Notice:\n\n${securityCheck.warnings.join('\n\n')}`);
+        }
+      }
+
+      // Send attendance with captured location data and device ID
       const result = await markAttendance({
         sessionId: sessionId as any,
         studentId: user.id as any,
         studentLatitude: capturedLocation.latitude,
         studentLongitude: capturedLocation.longitude,
+        deviceId: deviceId || undefined,
       });
 
       setSuccess(true);
@@ -247,6 +266,57 @@ export default function StudentAttendancePage() {
               <p className="text-sm text-slate-600">Department: {user.department} • Year {user.year}</p>
             </div>
 
+            {/* Device Security Status */}
+            {deviceInfo && (
+              <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                <h3 className="font-medium mb-2">🔒 Device Security</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {deviceInfo.isTrusted ? (
+                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    <span className={`text-sm font-medium ${deviceInfo.isTrusted ? 'text-green-700' : 'text-amber-700'}`}>
+                      {deviceInfo.isTrusted ? 'Trusted Device' : 'New/Untrusted Device'}
+                    </span>
+                  </div>
+                  
+                  <p className="text-xs text-slate-600">
+                    Device: {deviceInfo.deviceName || 'Unknown Device'}
+                  </p>
+                  
+                  {deviceInfo.isNew && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                      🆕 This is a new device. If this is your personal device, it will be automatically trusted for future attendance.
+                    </div>
+                  )}
+                  
+                  {hasSecurityIssues && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                      ⚠️ You have {unreadAlerts.length} unread security alert(s). Check your profile for details.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isRegistering && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-sm text-blue-700">Registering device for security...</span>
+                </div>
+              </div>
+            )}
+
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h3 className="font-medium mb-2 text-blue-900">📍 Location Required</h3>
               <p className="text-sm text-blue-700 mb-3">
@@ -294,7 +364,7 @@ export default function StudentAttendancePage() {
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 616 0z" />
                   </svg>
                   📱 Enable Location Access
                 </button>

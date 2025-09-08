@@ -16,6 +16,7 @@ import type {
 import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as debug from "../debug.js";
+import type * as deviceSecurity from "../deviceSecurity.js";
 import type * as sessions from "../sessions.js";
 import type * as users from "../users.js";
 
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   attendance: typeof attendance;
   auth: typeof auth;
   debug: typeof debug;
+  deviceSecurity: typeof deviceSecurity;
   sessions: typeof sessions;
   users: typeof users;
 }>;

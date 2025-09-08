@@ -7,8 +7,9 @@ export const markAttendanceWithQr = mutation({
     studentId: v.id("students"),
     studentLatitude: v.number(),
     studentLongitude: v.number(),
+    deviceId: v.optional(v.string()),
   },
-  handler: async (ctx, { qrToken, studentId, studentLatitude, studentLongitude }) => {
+  handler: async (ctx, { qrToken, studentId, studentLatitude, studentLongitude, deviceId }) => {
     // First validate the QR token
     const session = await ctx.db
       .query("sessions")
@@ -68,6 +69,16 @@ export const markAttendanceWithQr = mutation({
         qrTokenUsedBy: updatedUsedBy
       });
 
+      // Get device security info
+      let deviceTrusted = false;
+      if (deviceId) {
+        const device = await ctx.db
+          .query("deviceFingerprints")
+          .withIndex("by_device_id", (q) => q.eq("deviceId", deviceId))
+          .first();
+        deviceTrusted = device?.isTrusted || false;
+      }
+
       // Mark attendance with location data
       const id = await ctx.db.insert("attendance", {
         sessionId: session._id,
@@ -77,6 +88,8 @@ export const markAttendanceWithQr = mutation({
         studentLatitude,
         studentLongitude,
         distanceFromTeacher: distance,
+        deviceId,
+        deviceTrusted,
       });
 
       return { 
@@ -96,8 +109,9 @@ export const markAttendance = mutation({
     studentId: v.id("students"),
     studentLatitude: v.number(),
     studentLongitude: v.number(),
+    deviceId: v.optional(v.string()),
   },
-  handler: async (ctx, { sessionId, studentId, studentLatitude, studentLongitude }) => {
+  handler: async (ctx, { sessionId, studentId, studentLatitude, studentLongitude, deviceId }) => {
     // Check if session exists and is open
     const session = await ctx.db.get(sessionId);
     if (!session) throw new Error("Session not found");
@@ -139,6 +153,16 @@ export const markAttendance = mutation({
         throw new Error(`You must be within ${allowedRadius} meters of the class location to mark attendance. You are ${Math.round(distance)} meters away.`);
       }
 
+      // Get device security info
+      let deviceTrusted = false;
+      if (deviceId) {
+        const device = await ctx.db
+          .query("deviceFingerprints")
+          .withIndex("by_device_id", (q) => q.eq("deviceId", deviceId))
+          .first();
+        deviceTrusted = device?.isTrusted || false;
+      }
+
       // Mark attendance with location data
       const id = await ctx.db.insert("attendance", {
         sessionId,
@@ -148,11 +172,22 @@ export const markAttendance = mutation({
         studentLatitude,
         studentLongitude,
         distanceFromTeacher: distance,
+        deviceId,
+        deviceTrusted,
       });
 
       return { id, distance: Math.round(distance) };
     } else {
       // Fallback for sessions without location (backward compatibility)
+      let deviceTrusted = false;
+      if (deviceId) {
+        const device = await ctx.db
+          .query("deviceFingerprints")
+          .withIndex("by_device_id", (q) => q.eq("deviceId", deviceId))
+          .first();
+        deviceTrusted = device?.isTrusted || false;
+      }
+
       const id = await ctx.db.insert("attendance", {
         sessionId,
         studentId,
@@ -160,6 +195,8 @@ export const markAttendance = mutation({
         markedAt: Date.now(),
         studentLatitude,
         studentLongitude,
+        deviceId,
+        deviceTrusted,
       });
 
       return { id };

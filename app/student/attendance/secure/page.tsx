@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useDeviceSecurity } from "@/hooks/useDeviceSecurity";
 
 type SessionUser = { id: string; name: string; email: string; department: string; year: number; semester: number } | null;
 
@@ -20,6 +21,9 @@ export default function SecureAttendancePage() {
   const [locationPermission, setLocationPermission] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
 
   const markAttendanceWithQr = useMutation(api.attendance.markAttendanceWithQr);
+  
+  // Device security integration
+  const { deviceId, deviceInfo, isRegistering, hasSecurityIssues, unreadAlerts, checkDevice } = useDeviceSecurity(user?.id || null);
   
   // Validate QR token
   const tokenValidation = useQuery(
@@ -144,12 +148,27 @@ export default function SecureAttendancePage() {
       console.log('Accuracy:', position.coords.accuracy, 'meters');
       console.log('QR Token:', qrToken);
 
-      // Send attendance with QR token and location data
+      // Check device security before marking attendance
+      if (deviceId) {
+        const securityCheck = await checkDevice(tokenValidation?.sessionId, {
+          latitude,
+          longitude,
+        });
+        
+        if (securityCheck?.warnings && securityCheck.warnings.length > 0) {
+          console.warn('🔒 Device security warnings:', securityCheck.warnings);
+          // Show warnings but don't block attendance
+          alert(`⚠️ Security Notice:\n\n${securityCheck.warnings.join('\n\n')}`);
+        }
+      }
+
+      // Send attendance with QR token, location data, and device ID
       const result = await markAttendanceWithQr({
         qrToken,
         studentId: user.id as any,
         studentLatitude: latitude,
         studentLongitude: longitude,
+        deviceId: deviceId || undefined,
       });
 
       setSuccess(true);

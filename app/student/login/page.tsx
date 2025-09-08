@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAction } from "convex/react";
+import { useState } from "react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { generateDeviceFingerprint, generateClientDeviceId, setStoredDeviceId } from "@/utils/deviceFingerprint";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -14,12 +15,11 @@ const loginSchema = z.object({
 
 export default function StudentLoginPage() {
   const router = useRouter();
-  const login = useAction(api.auth.loginStudentAction);
+  const checkOwnership = useMutation(api.auth.checkDeviceOwnership);
+  const secureLogin = useAction(api.auth.loginStudentWithDeviceCheck);
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,18 +31,60 @@ export default function StudentLoginPage() {
     }
     setLoading(true);
     try {
-      const user = await login(parse.data);
-      if (typeof window !== "undefined") {
-        // Store in sessionStorage for backward compatibility
-        sessionStorage.setItem("student", JSON.stringify(user));
-        
-        // Also store in cookies for middleware
-        const cookieValue = JSON.stringify(user);
-        const expires = new Date();
-        expires.setDate(expires.getDate() + 7); // 7 days
-        document.cookie = `student-session=${encodeURIComponent(cookieValue)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+      // Build device fingerprint
+      const fp = generateDeviceFingerprint();
+      const deviceId = generateClientDeviceId();
+
+      // Pre-check device ownership (blocks account switching on same device)
+      const precheck = await checkOwnership({
+        email: parse.data.email,
+        deviceId,
+        deviceFingerprint: {
+          userAgent: fp.userAgent,
+          screenResolution: fp.screenResolution,
+          timezone: fp.timezone,
+          language: fp.language,
+          platform: fp.platform,
+        },
+      });
+
+      if (!precheck.allowed) {
+        setError(`This device is already registered to another student.\n\nOwner: ${precheck.ownerInfo}\nDevice: ${precheck.deviceName}`);
+        return;
       }
-      router.push("/student/dashboard");
+
+      // Secure login with server-side device enforcement
+      const result = await secureLogin({
+        email: parse.data.email,
+        password: parse.data.password,
+        deviceId,
+        deviceFingerprint: {
+          userAgent: fp.userAgent,
+          screenResolution: fp.screenResolution,
+          timezone: fp.timezone,
+          language: fp.language,
+          platform: fp.platform,
+        },
+      });
+
+      if (result?.success) {
+        if (typeof window !== "undefined") {
+          const session = { ...result.user };
+          sessionStorage.setItem("student", JSON.stringify(session));
+          const cookieValue = JSON.stringify(session);
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 7);
+          document.cookie = `student-session=${encodeURIComponent(cookieValue)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+          setStoredDeviceId(result.user.deviceId || deviceId);
+          // Mark this device as owned by this student for middleware/UI
+          const ownerExp = new Date();
+          ownerExp.setFullYear(ownerExp.getFullYear() + 1);
+          document.cookie = `device-owner=${encodeURIComponent(session.id)}; expires=${ownerExp.toUTCString()}; path=/; SameSite=Lax`;
+        }
+        router.push("/student/dashboard");
+      } else {
+        setError("Invalid credentials");
+      }
     } catch (err: any) {
       setError(err?.message ?? "Failed to login");
     } finally {
@@ -85,7 +127,7 @@ export default function StudentLoginPage() {
               />
             </div>
             {error && (
-              <p className="text-sm text-red-600" role="alert">
+              <p className="text-sm text-red-600 whitespace-pre-line" role="alert">
                 {error}
               </p>
             )}
@@ -98,9 +140,7 @@ export default function StudentLoginPage() {
             </button>
             <p className="text-sm text-slate-600">
               Don't have an account?{" "}
-              <Link href="/student/register" className="underline">
-                Register
-              </Link>
+              <Link href="/student/register" className="underline">Register</Link>
             </p>
           </form>
         </div>

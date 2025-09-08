@@ -22,6 +22,7 @@ export function middleware(request: NextRequest) {
   // Get authentication cookies
   const studentCookie = request.cookies.get('student-session')
   const teacherCookie = request.cookies.get('teacher-session')
+  const deviceOwnerCookie = request.cookies.get('device-owner') // studentId who owns this device
 
   // Check if the route is for students
   const isStudentRoute = pathname.startsWith('/student')
@@ -34,16 +35,20 @@ export function middleware(request: NextRequest) {
     );
     
     const isStudentAuthRoute = pathname === '/student/login' || pathname === '/student/register';
+
+    // If device already has an owner, block registration entirely
+    if (pathname === '/student/register' && deviceOwnerCookie) {
+      return NextResponse.redirect(new URL('/student/login', request.url));
+    }
     
     if (isProtectedStudentRoute) {
       // Check if student is authenticated
-      let studentUser = null;
+      let studentUser: any = null;
       
       if (studentCookie) {
         try {
           studentUser = JSON.parse(studentCookie.value);
         } catch (e) {
-          // Invalid cookie, clear it and redirect
           const response = NextResponse.redirect(new URL('/student/login', request.url));
           response.cookies.delete('student-session');
           return response;
@@ -55,9 +60,16 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/student/login', request.url));
       }
       
+      // Ensure the student session belongs to the device owner (if set)
+      if (deviceOwnerCookie && studentUser.id && studentUser.id !== deviceOwnerCookie.value) {
+        const response = NextResponse.redirect(new URL('/student/login', request.url));
+        // Clear mismatched session; keep device-owner to enforce lock
+        response.cookies.delete('student-session');
+        return response;
+      }
+      
       // Check that the email belongs to student side (has student-specific fields)
       if (!studentUser.department || !studentUser.year) {
-        // This email might be from teacher side, redirect to login
         const response = NextResponse.redirect(new URL('/student/login', request.url));
         response.cookies.delete('student-session');
         return response;
@@ -67,25 +79,24 @@ export function middleware(request: NextRequest) {
     }
     
     if (isStudentAuthRoute) {
-      // Check if student is already authenticated
-      let studentUser = null;
-      
+      // If the device already has an owner and there is a valid session for that owner, skip auth pages
       if (studentCookie) {
         try {
-          studentUser = JSON.parse(studentCookie.value);
-          
-          // If authenticated and has valid student data, redirect to dashboard
+          const studentUser = JSON.parse(studentCookie.value);
           if (studentUser && studentUser.email && studentUser.department && studentUser.year) {
-            return NextResponse.redirect(new URL('/student/dashboard', request.url));
+            // If deviceOwner exists and matches the current session user, always redirect to dashboard
+            if (!deviceOwnerCookie || deviceOwnerCookie.value === studentUser.id) {
+              return NextResponse.redirect(new URL('/student/dashboard', request.url));
+            }
           }
         } catch (e) {
-          // Invalid cookie, clear it and allow access to auth route
           const response = NextResponse.next();
           response.cookies.delete('student-session');
           return response;
         }
       }
-      
+
+      // If device has an owner but no session, allow reaching login so server-side checks can enforce owner match
       return NextResponse.next();
     }
   }
@@ -99,28 +110,23 @@ export function middleware(request: NextRequest) {
     const isTeacherAuthRoute = pathname === '/teacher/login' || pathname === '/teacher/register';
     
     if (isProtectedTeacherRoute) {
-      // Check if teacher is authenticated
-      let teacherUser = null;
+      let teacherUser: any = null;
       
       if (teacherCookie) {
         try {
           teacherUser = JSON.parse(teacherCookie.value);
         } catch (e) {
-          // Invalid cookie, clear it and redirect
           const response = NextResponse.redirect(new URL('/teacher/login', request.url));
           response.cookies.delete('teacher-session');
           return response;
         }
       }
       
-      // If no valid teacher session found
       if (!teacherUser || !teacherUser.email) {
         return NextResponse.redirect(new URL('/teacher/login', request.url));
       }
       
-      // Check that the email belongs to teacher side (doesn't have student-specific fields)
       if (teacherUser.department || teacherUser.year) {
-        // This email might be from student side, redirect to login
         const response = NextResponse.redirect(new URL('/teacher/login', request.url));
         response.cookies.delete('teacher-session');
         return response;
@@ -130,19 +136,15 @@ export function middleware(request: NextRequest) {
     }
     
     if (isTeacherAuthRoute) {
-      // Check if teacher is already authenticated
-      let teacherUser = null;
+      let teacherUser: any = null;
       
       if (teacherCookie) {
         try {
           teacherUser = JSON.parse(teacherCookie.value);
-          
-          // If authenticated and has valid teacher data, redirect to dashboard
           if (teacherUser && teacherUser.email && !teacherUser.department && !teacherUser.year) {
             return NextResponse.redirect(new URL('/teacher/dashboard', request.url));
           }
         } catch (e) {
-          // Invalid cookie, clear it and allow access to auth route
           const response = NextResponse.next();
           response.cookies.delete('teacher-session');
           return response;
@@ -155,19 +157,15 @@ export function middleware(request: NextRequest) {
   
   // For root path, check for existing sessions and redirect accordingly
   if (pathname === '/') {
-    // Check if user has existing sessions
     if (studentCookie) {
       try {
         const studentUser = JSON.parse(studentCookie.value);
         if (studentUser && studentUser.email && studentUser.department && studentUser.year) {
-          // Valid student session exists, redirect to student dashboard
           return NextResponse.redirect(new URL('/student/dashboard', request.url));
         } else {
-          // Invalid student session, redirect to student login
           return NextResponse.redirect(new URL('/student/login', request.url));
         }
       } catch (e) {
-        // Invalid cookie, redirect to student login
         return NextResponse.redirect(new URL('/student/login', request.url));
       }
     }
@@ -176,19 +174,15 @@ export function middleware(request: NextRequest) {
       try {
         const teacherUser = JSON.parse(teacherCookie.value);
         if (teacherUser && teacherUser.email && !teacherUser.department && !teacherUser.year) {
-          // Valid teacher session exists, redirect to teacher dashboard
           return NextResponse.redirect(new URL('/teacher/dashboard', request.url));
         } else {
-          // Invalid teacher session, redirect to teacher login
           return NextResponse.redirect(new URL('/teacher/login', request.url));
         }
       } catch (e) {
-        // Invalid cookie, redirect to teacher login
         return NextResponse.redirect(new URL('/teacher/login', request.url));
       }
     }
     
-    // No existing sessions found, allow access to main page with tab system
     return NextResponse.next();
   }
   
@@ -197,13 +191,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };
